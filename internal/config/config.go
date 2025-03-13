@@ -1,6 +1,7 @@
 package config
 
 import (
+	"flag"
 	"log"
 	"os"
 	"time"
@@ -22,7 +23,14 @@ type HTTPServer struct {
 	Password    string        `yaml:"password" env-required:"true" env:"HTTP_SERVER_PASSWORD"`
 }
 
+var (
+	MigrateFlag bool
+)
+
 func MustLoad() *Config {
+	flag.BoolVar(&MigrateFlag, "migrate", false, "Выполнить миграции")
+	flag.Parse()
+
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
 		log.Fatal("CONFIG_PATH is not set")

@@ -2,9 +2,11 @@ package sqlite
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/mattn/go-sqlite3" // for init driver
+	"kanban-app/internal/config"
 	"kanban-app/internal/storage"
 )
 
@@ -19,11 +21,11 @@ type Column struct {
 }
 
 type Card struct {
-	id       int64
-	name     string
-	content  string
-	sort     int64
-	columnId int64
+	Id       int64  `json:"id"`
+	Name     string `json:"name"`
+	Content  string `json:"content"`
+	Sort     int64  `json:"sort"`
+	ColumnId int64  `json:"columnId"`
 }
 
 func New(storagePath string) (*Storage, error) {
@@ -34,16 +36,19 @@ func New(storagePath string) (*Storage, error) {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	err = migrate(db)
-	if err != nil {
-		return nil, err
+	if config.MigrateFlag {
+		err = migrate(db)
+		if err != nil {
+			return nil, err
+		}
+
 	}
 
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) AddColumn(name string, sort int64) (int64, error) {
-	const op = "storage.sqlite.AddColumn"
+func (s *Storage) SaveColumn(name string, sort int64) (int64, error) {
+	const op = "storage.sqlite.SaveColumn"
 
 	stmt, err := s.db.Prepare(`INSERT INTO columns (name, sort) VALUES (?, ?)`)
 	if err != nil {
@@ -68,10 +73,10 @@ func (s *Storage) AddColumn(name string, sort int64) (int64, error) {
 	return id, nil
 }
 
-func (s *Storage) AddCard(name string, content string, sort int64, columnId int64) (int64, error) {
-	const op = "storage.sqlite.AddCard"
+func (s *Storage) SaveCard(name string, content string, sort int64, columnId int64) (int64, error) {
+	const op = "storage.sqlite.SaveCard"
 
-	stmt, err := s.db.Prepare(`INSERT INTO cards (name, content, sort, columnId) VALUES (?, ?, ?, ?)`)
+	stmt, err := s.db.Prepare(`INSERT INTO cards (name, content, sort, column_id) VALUES (?, ?, ?, ?)`)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
@@ -117,7 +122,7 @@ func (s *Storage) GetColumns() ([]Column, error) {
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: failed to get columns: %w", op, err)
 	}
 
 	return items, nil
@@ -126,7 +131,7 @@ func (s *Storage) GetColumns() ([]Column, error) {
 func (s *Storage) GetCards() ([]Card, error) {
 	const op = "storage.sqlite.GetCards"
 
-	rows, err := s.db.Query("SELECT * FROM items")
+	rows, err := s.db.Query("SELECT * FROM cards")
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +142,7 @@ func (s *Storage) GetCards() ([]Card, error) {
 	var items = make([]Card, 0)
 	for rows.Next() {
 		var c Card
-		err := rows.Scan(&c.id, &c.name, &c.content, &c.sort, &c.columnId)
+		err := rows.Scan(&c.Id, &c.Name, &c.Content, &c.Sort, &c.ColumnId)
 		if err != nil {
 			return nil, err
 		}
@@ -146,21 +151,57 @@ func (s *Storage) GetCards() ([]Card, error) {
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: failed to get cards: %w", op, err)
 	}
 
 	return items, nil
 }
 
+func (s *Storage) FindCard(id int64) (*Card, error) {
+	const op = "storage.sqlite.FindCard"
+
+	stmt, err := s.db.Prepare(`SELECT * from cards WHERE id = ?`)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	defer stmt.Close()
+	var c Card
+	err = stmt.QueryRow(id).Scan(&c.Id, &c.Name, &c.Content, &c.Sort, &c.ColumnId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%s: %w", op, storage.ErrNotFound)
+		}
+		return nil, fmt.Errorf("%s: failed to find card: %w", op, err)
+	}
+
+	return &c, nil
+}
+
+func (s *Storage) RemoveCard(id int64) error {
+	const op = "storage.sqlite.RemoveCard"
+
+	stmt, err := s.db.Prepare(`DELETE FROM cards WHERE id = ?`)
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
 func migrate(db *sql.DB) error {
 	const op = "storage.sqlite.migrate"
 	queries := []string{
-		`CREATE TABLE IF NOT EXISTS columns (
+		`DROP TABLE cards`,
+		`DROP TABLE columns`,
+		`CREATE TABLE columns (
 			id INTEGER PRIMARY KEY,
 			name TEXT NOT NULL UNIQUE,
 			sort INTEGER DEFAULT 0
 		);`,
-		`CREATE TABLE IF NOT EXISTS cards (
+		`CREATE TABLE cards (
 			id INTEGER PRIMARY KEY,
 			name TEXT NOT NULL UNIQUE,
 			content TEXT DEFAULT '',
@@ -177,6 +218,52 @@ func migrate(db *sql.DB) error {
 		}
 
 		_, err = stmt.Exec()
+		if err != nil {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+	}
+
+	err := addColumns(db)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Migration complete")
+
+	return nil
+}
+
+func addColumns(db *sql.DB) error {
+	const op = "storage.sqlite.addColumns"
+
+	columns := `[
+	  { "name": "Todo", "sort": 10 },
+	  { "name": "Block", "sort": 20 },
+	  { "name": "Development", "sort": 30 },
+	  { "name": "Review", "sort": 40 },
+	  { "name": "In test", "sort": 50 },
+	  { "name": "Done", "sort": 60 }
+	]`
+
+	type col struct {
+		Name string `json:"name"`
+		Sort int    `json:"sort"`
+	}
+
+	var cols = make([]col, 6)
+
+	err := json.Unmarshal([]byte(columns), &cols)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	for _, c := range cols {
+		stmt, err := db.Prepare("INSERT INTO columns (name, sort) VALUES (?, ?)")
+		if err != nil {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+
+		_, err = stmt.Exec(c.Name, c.Sort)
 		if err != nil {
 			return fmt.Errorf("%s: %w", op, err)
 		}
