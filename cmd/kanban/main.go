@@ -5,6 +5,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"kanban-app/internal/config"
 	"kanban-app/internal/http-server/handlers/card"
+	"kanban-app/internal/http-server/handlers/column"
 	mwLogger "kanban-app/internal/http-server/middleware/logger"
 	"kanban-app/internal/lib/logger/sl"
 	"kanban-app/internal/storage/sqlite"
@@ -38,6 +39,9 @@ func main() {
 
 	router.Post("/card", card.Add(log, storage))
 	router.Get("/card", card.GetAll(log, storage))
+	router.Delete("/card/{id}", card.Remove(log, storage))
+	router.Patch("/card/{id}", card.Update(log, storage))
+	router.Get("/column", column.GetAll(log, storage))
 
 	log.Info("starting kanban app server", slog.String("address", cfg.Address))
 

@@ -15,9 +15,9 @@ type Storage struct {
 }
 
 type Column struct {
-	id   int64
-	name string
-	sort int64
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
+	Sort int64  `json:"sort"`
 }
 
 type Card struct {
@@ -113,7 +113,7 @@ func (s *Storage) GetColumns() ([]Column, error) {
 	var items = make([]Column, 0)
 	for rows.Next() {
 		var c Column
-		err := rows.Scan(&c.id, &c.name, &c.sort)
+		err := rows.Scan(&c.Id, &c.Name, &c.Sort)
 		if err != nil {
 			return nil, err
 		}
@@ -184,6 +184,22 @@ func (s *Storage) RemoveCard(id int64) error {
 	defer stmt.Close()
 
 	_, err = stmt.Exec(id)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) UpdateCard(card *Card) error {
+	const op = "storage.sqlite.UpdateCard"
+	stmt, err := s.db.Prepare(`UPDATE cards set name = ?, content = ?, sort = ?, column_id = ? WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(card.Name, card.Content, card.Sort, card.ColumnId, card.Id)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
