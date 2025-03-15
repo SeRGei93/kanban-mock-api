@@ -5,11 +5,9 @@ go 1.23.0
 toolchain go1.23.5
 
 require (
-	github.com/fatih/color v1.18.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.24
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
 )
 
 require (
@@ -22,8 +20,6 @@ require (
 	github.com/go-playground/validator/v10 v10.25.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect

@@ -25,13 +25,15 @@ type HTTPServer struct {
 
 var (
 	MigrateFlag bool
+	PatchFlag   string
 )
 
 func MustLoad() *Config {
-	flag.BoolVar(&MigrateFlag, "migrate", false, "Выполнить миграции")
+	flag.BoolVar(&MigrateFlag, "migrate", false, "Run migrations")
+	flag.StringVar(&PatchFlag, "config", getEnv("CONFIG_PATH", ""), "config file path")
 	flag.Parse()
 
-	configPath := os.Getenv("CONFIG_PATH")
+	configPath := PatchFlag
 	if configPath == "" {
 		log.Fatal("CONFIG_PATH is not set")
 	}
@@ -48,4 +50,11 @@ func MustLoad() *Config {
 	}
 
 	return &cfg
+}
+
+func getEnv(key string, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
 }
