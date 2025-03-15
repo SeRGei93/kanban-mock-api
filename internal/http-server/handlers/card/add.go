@@ -12,7 +12,7 @@ import (
 	"net/http"
 )
 
-type Request struct {
+type AddCardRequest struct {
 	Name     string `json:"name" validate:"required"`
 	Content  string `json:"content,omitempty"`
 	Sort     int64  `json:"sort" validate:"required"`
@@ -37,7 +37,7 @@ func Add(log *slog.Logger, saver SaverCard) http.HandlerFunc {
 			slog.String("request_id", middleware.GetReqID(request.Context())),
 		)
 
-		var req Request
+		var req AddCardRequest
 		err := render.DecodeJSON(request.Body, &req)
 		if err != nil {
 			log.Error("failed to decode request body", sl.Err(err))
