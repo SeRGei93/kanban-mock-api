@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mattn/go-sqlite3" // for init driver
 	"kanban-app/internal/config"
 	"kanban-app/internal/storage"
+
+	"github.com/mattn/go-sqlite3" // for init driver
 )
 
 type Storage struct {
@@ -210,8 +211,8 @@ func (s *Storage) UpdateCard(card *Card) error {
 func migrate(db *sql.DB) error {
 	const op = "storage.sqlite.migrate"
 	queries := []string{
-		`DROP TABLE cards`,
-		`DROP TABLE columns`,
+		`DROP TABLE IF EXISTS cards`,
+		`DROP TABLE IF EXISTS columns`,
 		`CREATE TABLE columns (
 			id INTEGER PRIMARY KEY,
 			name TEXT NOT NULL UNIQUE,
